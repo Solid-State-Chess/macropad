@@ -34,7 +34,6 @@ static void init_leds(void) {
 
 
 int main(void) {
-    tud_init(1);
     //NVIC_EnableIRQ(TIM16_IRQn);
     //__NVIC_SetPriority(TIM16_IRQn, 0);
     
@@ -58,12 +57,11 @@ int main(void) {
     //Enable GPIO port clock for GPIOA
     SET_BIT(RCC->AHBENR, RCC_AHBENR_GPIOAEN);
     
-
+    tud_init(1);
     capsense_init();
     init_leds();
     capsense_new((uint8_t[]){1, 0, 5, 6, 7});
     
-    uint32_t ios[2] = {GPIO_ODR_13, GPIO_ODR_14};
 	for(;;) {
         tud_task();
         for(uint8_t i = 0; i < CAPSENSE_LEN; ++i) {
@@ -72,9 +70,9 @@ int main(void) {
 
         for(uint8_t i = CAPSENSE_LEN; i > 0; --i) {
             if(SENSORS[i - 1].time > 65) {
-                SET_BIT(GPIOA->ODR, ios[i & 1]);
+                SET_BIT(GPIOA->ODR, GPIO_ODR_13);
             } else {
-                CLEAR_BIT(GPIOA->ODR, ios[i & 1]);
+                CLEAR_BIT(GPIOA->ODR, GPIO_ODR_13);
             }
         }
 
