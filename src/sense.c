@@ -10,7 +10,7 @@ static volatile capsense_t * volatile measured = 0;
 
 void capsense_new_sgl(capsense_t *sensor, uint8_t gpion);
 
-void capsense_new(uint8_t *gpion) {
+void capsense_new(uint8_t gpion[CAPSENSE_LEN]) {
     for(uint8_t i = 0; i < CAPSENSE_LEN; ++i) {
         capsense_new_sgl(&SENSORS[i], gpion[i]);
     }

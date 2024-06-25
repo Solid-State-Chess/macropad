@@ -42,13 +42,17 @@ target_include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/cmsis_core/Core/Include"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/tinyusb/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/tinyusb/hw"
+    "${CMAKE_CURRENT_SOURCE_DIR}/lib/tinyusb/src/portable/st/stm32_fsdev"
 )
 
 target_compile_definitions(
     ${CMAKE_PROJECT_NAME}
     PUBLIC
-    CFG_TUSB_MCU=stm32f0
+    CFG_TUSB_MCU=300
+    CFG_TUD_ENABLE=1
+    CFG_TUD_HID=1
     TUP_DCD_ENDPOINT_MAX=8
+    DEBUG=1
 )
 
 

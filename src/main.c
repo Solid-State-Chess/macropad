@@ -1,4 +1,6 @@
+#include "tusb_config.h"
 #include <stdint.h>
+#include "device/usbd.h"
 #include "sense.h"
 #include "system_stm32f0xx.h"
 #include <stm32f0xx.h>
@@ -32,6 +34,14 @@ static void init_leds(void) {
     );
 }
 
+static void blink(void) {
+    for(;;) {
+        GPIOA->ODR ^= GPIO_ODR_14;
+        for(unsigned i = 0; i < 250000; ++i) {
+            READ_BIT(GPIOA->ODR, GPIO_ODR_14);
+        }
+    }
+}
 
 int main(void) {
     //NVIC_EnableIRQ(TIM16_IRQn);
@@ -51,31 +61,47 @@ int main(void) {
     //Set AHB and APB1 prescalers to 1
     MODIFY_REG(RCC->CFGR, RCC_CFGR_HPRE, RCC_CFGR_HPRE_DIV1);
     MODIFY_REG(RCC->CFGR, RCC_CFGR_PPRE, RCC_CFGR_PPRE_DIV1);
-    
+
     while(READ_BIT(RCC->CFGR, RCC_CFGR_SWS) != RCC_CFGR_SWS_HSI);
     
     //Enable GPIO port clock for GPIOA
     SET_BIT(RCC->AHBENR, RCC_AHBENR_GPIOAEN);
+
+    init_leds(); 
     
-    tud_init(1);
+
+    SET_BIT(CRS->CR, CRS_CR_AUTOTRIMEN);
+    MODIFY_REG(CRS->CFGR, CRS_CFGR_SYNCSRC_Msk, CRS_CFGR_SYNCSRC_1);
+    SET_BIT(RCC->APB1ENR, RCC_APB1ENR_CRSEN);
+    SET_BIT(SYSCFG->CFGR1, SYSCFG_CFGR1_PA11_PA12_RMP);
+
+    SET_BIT(RCC->CR2, RCC_CR2_HSI48ON);
+    while(READ_BIT(RCC->CR2, RCC_CR2_HSI48RDY) != RCC_CR2_HSI48RDY);
+    SET_BIT(RCC->APB1ENR, RCC_APB1ENR_USBEN);
+
+    if(!tud_init(0)) {
+        blink();
+    }
+
     capsense_init();
-    init_leds();
     capsense_new((uint8_t[]){1, 0, 5, 6, 7});
     
 	for(;;) {
-        tud_task();
         for(uint8_t i = 0; i < CAPSENSE_LEN; ++i) {
             capsense_step();
         }
 
-        for(uint8_t i = CAPSENSE_LEN; i > 0; --i) {
-            if(SENSORS[i - 1].time > 65) {
+        //CLEAR_BIT(GPIOA->ODR, GPIO_ODR_13);
+
+        for(uint8_t i = 0; i < CAPSENSE_LEN; ++i) {
+            if(SENSORS[i].time >= 0) {
                 SET_BIT(GPIOA->ODR, GPIO_ODR_13);
-            } else {
-                CLEAR_BIT(GPIOA->ODR, GPIO_ODR_13);
             }
         }
 
+        if(tud_task_event_ready()) {
+            tud_task();
+        }
     }
 }
 
@@ -86,18 +112,21 @@ void tud_mount_cb(void) {
 
 // Invoked when device is unmounted
 void tud_umount_cb(void) {
-    CLEAR_BIT(GPIOA->ODR, GPIO_ODR_14);
+    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
+    //CLEAR_BIT(GPIOA->ODR, GPIO_ODR_14);
 }
 
 // Invoked when usb bus is suspended
 // remote_wakeup_en : if host allow us  to perform remote wakeup
 // Within 7ms, device must draw an average of current less than 2.5 mA from bus
 void tud_suspend_cb(bool remote_wakeup_en) {
+    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
     (void)remote_wakeup_en;
 }
 
 // Invoked when usb bus is resumed
 void tud_resume_cb(void) {
+    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
 }
 
 //--------------------------------------------------------------------+
@@ -115,7 +144,13 @@ uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t
   (void) buffer;
   (void) reqlen;
 
-  return 0;
+  if(!tud_hid_n_keyboard_report(itf, report_id, 0, "w\0\0\0\0")) {
+        blink();
+    }
+
+
+    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
+  return 1;
 }
 
 // Invoked when received SET_REPORT control request or
@@ -126,6 +161,7 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
   (void) report_id;
   (void) report_type;
 
+    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
   // echo back anything we received from host
   tud_hid_report(0, buffer, bufsize);
 }
