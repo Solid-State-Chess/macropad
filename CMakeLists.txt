@@ -16,6 +16,7 @@ file(
     SRC
     CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/src/*.c"
+    "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/cmsis_device_f0/Source/Templates/system_stm32f0xx.c"
     "${CMAKE_CURRENT_SOURCE_DIR}/Startup/startup_stm32f042f6px.s"
     "${CMAKE_CURRENT_SOURCE_DIR}/lib/tinyusb/src/*.c"
@@ -48,10 +49,9 @@ target_include_directories(
 target_compile_definitions(
     ${CMAKE_PROJECT_NAME}
     PUBLIC
-    CFG_TUSB_MCU=300
+    CFG_TUSB_MCU=OPT_MCU_STM32F0
     CFG_TUD_ENABLE=1
     CFG_TUD_HID=1
-    TUP_DCD_ENDPOINT_MAX=8
     DEBUG=1
 )
 

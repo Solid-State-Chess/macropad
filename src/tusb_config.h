@@ -37,6 +37,7 @@
 // RHPort number used for device can be defined by board.mk, default to port 0
 #ifndef BOARD_TUD_RHPORT
 #define BOARD_TUD_RHPORT      0
+#define TUD_OPT_RHPORT 0
 #endif
 
 // RHPort max operational speed can defined by board.mk
@@ -98,7 +99,7 @@
 #define CFG_TUD_VENDOR            0
 
 // HID buffer size Should be sufficient to hold ID (if any) + Data
-#define CFG_TUD_HID_EP_BUFSIZE    64
+#define CFG_TUD_HID_EP_BUFSIZE    16
 
 #ifdef __cplusplus
  }

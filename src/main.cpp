@@ -1,8 +1,8 @@
+#include "class/hid/hid.h"
 #include "tusb_config.h"
 #include <stdint.h>
 #include "device/usbd.h"
-#include "sense.h"
-#include "system_stm32f0xx.h"
+#include "sense.hpp"
 #include <stm32f0xx.h>
 #include <stm32f042x6.h>
 #include <core_cm0.h>
@@ -45,7 +45,7 @@ static void blink(void) {
 
 int main(void) {
     //NVIC_EnableIRQ(TIM16_IRQn);
-    //__NVIC_SetPriority(TIM16_IRQn, 0);
+    //__NVIC_SetPriority(USB_IRQn, 100);
     
     SET_BIT(RCC->APB2ENR, RCC_APB2ENR_SYSCFGEN);
     SET_BIT(RCC->APB1ENR, RCC_APB1ENR_PWREN);
@@ -68,51 +68,88 @@ int main(void) {
     SET_BIT(RCC->AHBENR, RCC_AHBENR_GPIOAEN);
 
     init_leds(); 
+
+    SET_BIT(RCC->APB1ENR, RCC_APB1ENR_CRSEN);
     
+    SET_BIT(RCC->CR2, RCC_CR2_HSI48ON);
+    while(READ_BIT(RCC->CR2, RCC_CR2_HSI48RDY) != RCC_CR2_HSI48RDY);
 
     SET_BIT(CRS->CR, CRS_CR_AUTOTRIMEN);
     MODIFY_REG(CRS->CFGR, CRS_CFGR_SYNCSRC_Msk, CRS_CFGR_SYNCSRC_1);
-    SET_BIT(RCC->APB1ENR, RCC_APB1ENR_CRSEN);
     SET_BIT(SYSCFG->CFGR1, SYSCFG_CFGR1_PA11_PA12_RMP);
 
-    SET_BIT(RCC->CR2, RCC_CR2_HSI48ON);
-    while(READ_BIT(RCC->CR2, RCC_CR2_HSI48RDY) != RCC_CR2_HSI48RDY);
     SET_BIT(RCC->APB1ENR, RCC_APB1ENR_USBEN);
 
-    if(!tud_init(0)) {
+    if(!tusb_init()) {
         blink();
     }
 
-    capsense_init();
-    capsense_new((uint8_t[]){1, 0, 5, 6, 7});
     
+    CapacitiveTouchArray sensor{0, 1, 5, 6, 7};
+
+    bool pending = false;
+    bool report = true;
+
+    static uint8_t KEYS[CAPSENSE_LEN] = {
+        HID_KEY_ENTER,
+        HID_KEY_6,
+        HID_KEY_1,
+        HID_KEY_F,
+        HID_KEY_L
+    };
+
+    static uint8_t modifications[CAPSENSE_LEN] = {
+        0,
+        0,
+        0,
+        0,
+        KEYBOARD_MODIFIER_LEFTGUI | KEYBOARD_MODIFIER_LEFTSHIFT | KEYBOARD_MODIFIER_LEFTCTRL | KEYBOARD_MODIFIER_LEFTALT
+    };
+
+    uint8_t mod = 0;
+
+    static uint8_t keycode[6] = {0};
 	for(;;) {
-        for(uint8_t i = 0; i < CAPSENSE_LEN; ++i) {
-            capsense_step();
+
+
+        uint8_t pressed = 0;
+        if(sensor.step(&pressed) && !pending) {
+            mod = modifications[pressed];
+            keycode[0] = KEYS[pressed];
+            pending = true;
+        } else {
+
         }
 
-        //CLEAR_BIT(GPIOA->ODR, GPIO_ODR_13);
-
-        for(uint8_t i = 0; i < CAPSENSE_LEN; ++i) {
-            if(SENSORS[i].time >= 0) {
-                SET_BIT(GPIOA->ODR, GPIO_ODR_13);
+        if(pending && tud_hid_ready()) {
+            pending = false;
+            report = true;
+            tud_hid_keyboard_report(1, mod, keycode);
+        }
+        
+        if(report) {
+            if(tud_hid_ready()) {
+                report = false;
+                keycode[0] = 0;
+                tud_hid_keyboard_report(1, 0, keycode);
             }
         }
 
-        if(tud_task_event_ready()) {
-            tud_task();
-        }
+        tud_task();
     }
+}
+
+extern "C" void USB_IRQHandler() {
+  tud_int_handler(0);
 }
 
 // Invoked when device is mounted
 void tud_mount_cb(void) {
-    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
+    //SET_BIT(GPIOA->ODR, GPIO_ODR_14);
 }
 
 // Invoked when device is unmounted
 void tud_umount_cb(void) {
-    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
     //CLEAR_BIT(GPIOA->ODR, GPIO_ODR_14);
 }
 
@@ -120,13 +157,13 @@ void tud_umount_cb(void) {
 // remote_wakeup_en : if host allow us  to perform remote wakeup
 // Within 7ms, device must draw an average of current less than 2.5 mA from bus
 void tud_suspend_cb(bool remote_wakeup_en) {
-    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
+    //SET_BIT(GPIOA->ODR, GPIO_ODR_14);
     (void)remote_wakeup_en;
 }
 
 // Invoked when usb bus is resumed
 void tud_resume_cb(void) {
-    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
+    //SET_BIT(GPIOA->ODR, GPIO_ODR_14);
 }
 
 //--------------------------------------------------------------------+
@@ -137,20 +174,13 @@ void tud_resume_cb(void) {
 // Application must fill buffer report's content and return its length.
 // Return zero will cause the stack to STALL request
 uint16_t tud_hid_get_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t report_type, uint8_t* buffer, uint16_t reqlen) {
-  // TODO not Implemented
-  (void) itf;
-  (void) report_id;
-  (void) report_type;
-  (void) buffer;
-  (void) reqlen;
+    (void) itf;
+    (void) report_id;
+    (void) report_type;
+    (void) buffer;
+    (void) reqlen;
 
-  if(!tud_hid_n_keyboard_report(itf, report_id, 0, "w\0\0\0\0")) {
-        blink();
-    }
-
-
-    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
-  return 1;
+    return 0;
 }
 
 // Invoked when received SET_REPORT control request or
@@ -160,8 +190,4 @@ void tud_hid_set_report_cb(uint8_t itf, uint8_t report_id, hid_report_type_t rep
   (void) itf;
   (void) report_id;
   (void) report_type;
-
-    SET_BIT(GPIOA->ODR, GPIO_ODR_14);
-  // echo back anything we received from host
-  tud_hid_report(0, buffer, bufsize);
 }
